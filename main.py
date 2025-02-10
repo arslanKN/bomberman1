@@ -123,7 +123,8 @@ class Game:
                 y = random.randint(1, 8) * TILE_SIZE
                 if not any(s.rect.collidepoint(x, y) for s in self.walls) and \
                         not any(s.rect.collidepoint(x, y) for s in self.bricks) and \
-                        (x, y) not in [(1, 1), (2, 1), (1, 2)]:
+                        (x, y) != (1, 1) and (x, y) != (2, 1) and (x, y) != (1, 2) and (x, y) != (3, 1) \
+                        and (x, y) != (1, 3):
                     monster = Monster(x, y)
                     self.monsters.add(monster)
                     self.all_sprites.add(monster)
@@ -350,3 +351,4 @@ while running:
                 break
 
     pygame.display.flip()
+pygame.quit()
