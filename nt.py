@@ -17,13 +17,16 @@ RED = (255, 0, 0)
 LEVEL_COLOR = (255, 255, 255)
 DOOR_SPAWN_CHANCE = 0.1
 ANIMATION_SPEED = 0.2  # Скорость смены кадров анимации
+game = None
+
 
 def load_animation(folder, prefix, count):
     images = []
-    for i in range(1, count+1):
+    for i in range(1, count + 1):
         image = pygame.image.load(f"data/{prefix}{i}.png").convert_alpha()
         images.append(pygame.transform.scale(image, (TILE_SIZE, TILE_SIZE)))
     return images
+
 
 # Загрузка анимаций
 player_animations = {
@@ -47,6 +50,8 @@ wall_img = pygame.transform.scale(pygame.image.load("data/wall.png").convert_alp
 brick_img = pygame.transform.scale(pygame.image.load("data/brick.png").convert_alpha(), (TILE_SIZE, TILE_SIZE))
 bomb_img = pygame.transform.scale(pygame.image.load("data/bomb.png").convert_alpha(), (TILE_SIZE, TILE_SIZE))
 door_img = pygame.transform.scale(pygame.image.load("data/door.png").convert_alpha(), (TILE_SIZE, TILE_SIZE))
+explosion_img = pygame.transform.scale(pygame.image.load("data/explosion.png").convert_alpha(), (TILE_SIZE, TILE_SIZE))
+
 
 class Door(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -152,6 +157,7 @@ class AnimatedSprite(pygame.sprite.Sprite):
 
         self.image = self.animations[self.state][int(self.frame_index)]
 
+
 class Player(AnimatedSprite):
     def __init__(self):
         super().__init__(player_animations)
@@ -197,6 +203,7 @@ class Player(AnimatedSprite):
             state = self.direction if self.moving else 'idle'
             self.animate(state)
 
+
 class Monster(AnimatedSprite):
     def __init__(self, x, y):
         super().__init__(monster_animations)
@@ -229,6 +236,28 @@ class Monster(AnimatedSprite):
         state = 'move' if self.moving else 'idle'
         self.animate(state)
 
+
+class Bomb(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = bomb_img
+        grid_x = (x // TILE_SIZE) * TILE_SIZE
+        grid_y = (y // TILE_SIZE) * TILE_SIZE
+        self.rect = self.image.get_rect(topleft=(grid_x, grid_y))
+        self.timer = 3
+        self.range = EXPLOSION_RANGE
+        game.all_sprites.add(self)
+        game.bombs.add(self)
+
+    def update(self):
+        self.timer -= 1 / FPS
+        if self.timer <= 0:
+            self.explode()
+
+    def explode(self):
+        ExplosionCenter(self.rect.x, self.rect.y)
+
+
 class ExplosionCenter(AnimatedSprite):
     def __init__(self, x, y):
         super().__init__({'explode': explosion_animation}, 'explode')
@@ -244,16 +273,17 @@ class ExplosionCenter(AnimatedSprite):
             self.kill()
 
 
-class ExplosionPart(pygame.sprite.Sprite):
+class ExplosionPart(AnimatedSprite):
     def __init__(self, x, y, direction):
-        super().__init__()
-        self.image = pygame.transform.rotate(explosion_img, 90 if direction[0] else 0)
-        self.rect = self.image.get_rect(topleft=(x, y))
+        super().__init__({'explode': explosion_animation}, 'explode')
+        self.image = pygame.transform.rotate(self.image, 90 if direction[0] else 0)
+        self.rect.topleft = (x, y)
         self.timer = 0.8
         game.all_sprites.add(self)
         game.explosions.add(self)
 
     def update(self):
+        super().update()
         self.timer -= 1 / FPS
         if self.timer <= 0:
             self.kill()
@@ -285,60 +315,63 @@ class ExplosionEnd(pygame.sprite.Sprite):
 
 
 # Инициализация игры
-game = Game()
-game.new_level()
+if __name__ == "__main__":
+    game = Game()
+    game.new_level()
+    # Основной цикл
+    clock = pygame.time.Clock()
+    running = True
 
-# Основной цикл
-clock = pygame.time.Clock()
-running = True
+    while running:
+        clock.tick(FPS)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                grid_x = (game.player.rect.centerx // TILE_SIZE) * TILE_SIZE
+                grid_y = (game.player.rect.centery // TILE_SIZE) * TILE_SIZE
+                if not any(bomb.rect.topleft == (grid_x, grid_y) for bomb in game.bombs):
+                    Bomb(grid_x, grid_y)
 
-while running:
-    clock.tick(FPS)
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        # Обновление спрайтов
+        keys = pygame.key.get_pressed()
+        game.player.update(keys)
+        game.bombs.update()
+        game.monsters.update()
+        game.explosions.update()
+
+        if pygame.sprite.spritecollideany(game.player, game.doors):
+            game.new_level()
+            continue
+            # Проверка столкновений
+        if pygame.sprite.spritecollideany(game.player, game.monsters) or \
+                pygame.sprite.spritecollideany(game.player, game.explosions):
+            game.player.alive = False
+
+        # Проверка перехода на новый уровень
+        if pygame.sprite.spritecollideany(game.player, game.doors):
+            game.new_level()
+
+        # Удаление мертвых монстров
+        pygame.sprite.groupcollide(game.monsters, game.explosions, True, False)
+
+        # Отрисовка
+        screen.fill(BACKGROUND_COLOR)
+        game.all_sprites.draw(screen)
+
+        # Отображение уровня
+        font = pygame.font.Font(None, 36)
+        level_text = font.render(f'Level: {game.level}', True, LEVEL_COLOR)
+        screen.blit(level_text, (10, 10))
+
+        if not game.player.alive:
+            font = pygame.font.Font(None, 74)
+            text = font.render('Game Over', True, RED)
+            screen.blit(text, (SCREEN_WIDTH // 2 - 140, SCREEN_HEIGHT // 2 - 50))
+            pygame.display.flip()
+            time.sleep(2)
             running = False
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            grid_x = (game.player.rect.centerx // TILE_SIZE) * TILE_SIZE
-            grid_y = (game.player.rect.centery // TILE_SIZE) * TILE_SIZE
-            if not any(bomb.rect.topleft == (grid_x, grid_y) for bomb in game.bombs):
-                Bomb(grid_x, grid_y)
 
-    # Обновление спрайтов
-    keys = pygame.key.get_pressed()
-    game.player.update(keys)
-    game.bombs.update()
-    game.monsters.update()
-    game.explosions.update()
-
-    # Проверка столкновений
-    if pygame.sprite.spritecollideany(game.player, game.monsters) or \
-            pygame.sprite.spritecollideany(game.player, game.explosions):
-        game.player.alive = False
-
-    # Проверка перехода на новый уровень
-    if pygame.sprite.spritecollideany(game.player, game.doors):
-        game.new_level()
-
-    # Удаление мертвых монстров
-    pygame.sprite.groupcollide(game.monsters, game.explosions, True, False)
-
-    # Отрисовка
-    screen.fill(BACKGROUND_COLOR)
-    game.all_sprites.draw(screen)
-
-    # Отображение уровня
-    font = pygame.font.Font(None, 36)
-    level_text = font.render(f'Level: {game.level}', True, LEVEL_COLOR)
-    screen.blit(level_text, (10, 10))
-
-    if not game.player.alive:
-        font = pygame.font.Font(None, 74)
-        text = font.render('Game Over', True, RED)
-        screen.blit(text, (SCREEN_WIDTH // 2 - 140, SCREEN_HEIGHT // 2 - 50))
         pygame.display.flip()
-        time.sleep(2)
-        running = False
 
-    pygame.display.flip()
-
-pygame.quit()
+    pygame.quit()
