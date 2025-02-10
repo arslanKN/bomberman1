@@ -119,12 +119,10 @@ class Game:
     def spawn_monsters(self, count):
         for _ in range(count):
             while True:
-                x = random.randint(1, 12) * TILE_SIZE
-                y = random.randint(1, 8) * TILE_SIZE
+                x = random.randint(3, 12) * TILE_SIZE
+                y = random.randint(3, 8) * TILE_SIZE
                 if not any(s.rect.collidepoint(x, y) for s in self.walls) and \
-                        not any(s.rect.collidepoint(x, y) for s in self.bricks) and \
-                        (x, y) != (1, 1) and (x, y) != (2, 1) and (x, y) != (1, 2) and (x, y) != (3, 1) \
-                        and (x, y) != (1, 3):
+                        not any(s.rect.collidepoint(x, y) for s in self.bricks):
                     monster = Monster(x, y)
                     self.monsters.add(monster)
                     self.all_sprites.add(monster)
