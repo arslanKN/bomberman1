@@ -103,7 +103,7 @@ class Game:
                 elif tile == " ":
                     if random.random() < 0.4 and (x, y) not in [(1, 1), (2, 1), (1, 2)]:
                         # Всегда спавним дверь, но делаем её неактивной сначала
-                        if not self.door_spawned and random.random() < DOOR_SPAWN_CHANCE:
+                        if not self.door_spawned and random.random() < DOOR_SPAWN_CHANCE and len(self.bricks) < 10:
                             door = Door(*pos)
                             door.active = False  # Добавляем флаг активности
                             self.doors.add(door)
